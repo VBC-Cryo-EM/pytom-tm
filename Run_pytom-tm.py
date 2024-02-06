@@ -12,7 +12,7 @@ parser.add_argument('--input-tomos', '-i', help='Path to relion ReconstructTomog
 parser.add_argument('--template', '-t' , help='Path to the mrc file of your template matching reference', required=True)
 parser.add_argument('--mask','-m', help='Path to the mask file applied to your template matching reference', required=True)
 parser.add_argument('--non-spherical-mask', action='store_true', help='Use a non-spherical mask during template matching')
-parser.add_argument('--output_dir', '-o', help='Path to output directory where pytom results are saved. If not gived, the default is input_tomos/pytom_tm', default=None)
+parser.add_argument('--output_dir', '-o', help='Path to output directory where pytom results are saved. If not given, the default is input_tomos/pytom_tm', default=None)
 parser.add_argument('--amplitude-contrast', type=float, default=0.08, help='Amplitude contrast (default: 0.08)')
 parser.add_argument('--spherical-abberation', type=float, default=2.7, help='Spherical abberation (default: 2.7)')
 parser.add_argument('--voltage', type=int, default=300, help='Voltage value (default: 300)')
