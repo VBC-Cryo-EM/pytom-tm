@@ -1,4 +1,4 @@
-name: pytom_from_star
+name: pytom_tm
 channels:
 - pkgs/main
 dependencies:
