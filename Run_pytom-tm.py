@@ -12,7 +12,7 @@ parser.add_argument('--input-tomos', '-i', help='Path to relion ReconstructTomog
 parser.add_argument('--template', '-t' , help='Path to the mrc file of your template matching reference', required=True)
 parser.add_argument('--mask','-m', help='Path to the mask file applied to your template matching reference', required=True)
 parser.add_argument('--non-spherical-mask', action='store_true', help='Use a non-spherical mask during template matching')
-parser.add_argument('--output-dir', '-o', help='Path to output directory where pytom results are saved. If not given, the default is input_tomos/pytom_tm', default=None)
+parser.add_argument('--output-dir', '-o', help='Path to output directory where pytom results are saved. If not gived, the default is input_tomos/pytom_tm', default=None)
 parser.add_argument('--amplitude-contrast', type=float, default=0.08, help='Amplitude contrast (default: 0.08)')
 parser.add_argument('--spherical-abberation', type=float, default=2.7, help='Spherical abberation (default: 2.7)')
 parser.add_argument('--voltage', type=int, default=300, help='Voltage value (default: 300)')
@@ -23,6 +23,8 @@ parser.add_argument('--low-pass', type=int, required=False, help='Apply a low-pa
 parser.add_argument('--volumesplit', '-s', nargs='*', help='Split the volume into smaller parts for the search, can be relevant if the volume does not fit into GPU memory. Format is x y z, e.g. --volume-split 1 2 1 will split y into 2 chunks, resulting in 2 subvolumes. --volume-split 2 2 1 will split x and y in 2 chunks, resulting in 2 x 2 = 4 subvolumes.', default=[])
 parser.add_argument('-n', '--number_of_particles', type=int, required=True, help='Number of particles')
 parser.add_argument('-r', '--particle_radius', type=int, required=True, help='Particle radius in pixels')
+parser.add_argument('--cutoff', '-c', type=float, help='Cutoff value to be used in pytom_extract_candidates', required=False)
+
 parser.add_argument('--batch-size', '-b' , type=int, default=10, help='Run pytom on this many tomograms per job. I.e if you have 50 tomograms in the relion  idrectory, a batch size of 10 will generate 5 SLURM scripts, each procesing 10 tomograms.')
 #SLURM options 
 parser.add_argument('--mem', type=str, default='30G', help='Memory for SLURM job (default: 30G)')
@@ -31,7 +33,7 @@ parser.add_argument('--gres', type=int, default=1, help='How many GPUs to use pe
 parser.add_argument('--gpu-ids','-g', nargs='*', help='Which GPUs to use. Default is 0. Needs to be given when --gres>1', default=[0])
 
 #option to only make scripts for analysis
-parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change --number_of_particles or --particle_radius for analysis of the template matching results')
+parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change ----number_of_particles or --particle_radius for analysis of the template matching results')
 
 # Parse arguments
 args = parser.parse_args()
@@ -137,8 +139,12 @@ def generate_estimate_roc_command(tilt_series_name, args):
 # Function to generate the extract candidates command
 def generate_extract_candidates_command(tilt_series_name, args):
     job_json_file = os.path.join(args.output_dir, f'rec_{tilt_series_name}_job.json')
-    return f"apptainer run --nv {container_path} 'pytom_extract_candidates.py -j {job_json_file} -n {args.number_of_particles} -r {args.particle_radius}'"
-
+    command = f"apptainer run --nv {container_path} 'pytom_extract_candidates.py -j {job_json_file} -n {args.number_of_particles} -r {args.particle_radius}"
+    # Include the cutoff value in the command if it's supplied
+    if args.cutoff is not None:
+        command += f" -c {args.cutoff}"
+    command += "'"
+    return command
 
 
 # Convert file paths to absolute paths
