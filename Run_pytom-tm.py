@@ -39,6 +39,18 @@ args = parser.parse_args()
 # Path to pytom container
 container_path = '/resources/containers/pytom_tm.sif'
 
+# Checking if input files/directories exist
+def check_file_exists(file_path, description):
+    if not os.path.exists(file_path):
+        print(f"Error: The specified {description}, '{file_path}', does not exist.")
+        exit(1)
+
+# Perform checks
+check_file_exists(args.input_tomos, "input tomograms directory")
+check_file_exists(args.template, "template file")
+check_file_exists(args.mask, "mask file")
+
+
 # Function to find the closest value in the list to the user's input
 def find_closest_value(input_value, allowed_values):
     closest_value = min(allowed_values, key=lambda x: abs(x - input_value))
