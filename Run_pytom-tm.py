@@ -31,7 +31,7 @@ parser.add_argument('--gres', type=int, default=1, help='How many GPUs to use pe
 parser.add_argument('--gpu-ids','-g', nargs='*', help='Which GPUs to use. Default is 0. Needs to be given when --gres>1', default=[0])
 
 #option to only make scripts for analysis
-parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change ----number_of_particles or --particle_radius for analysis of the template matching results')
+parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change --number_of_particles or --particle_radius for analysis of the template matching results')
 
 # Parse arguments
 args = parser.parse_args()
