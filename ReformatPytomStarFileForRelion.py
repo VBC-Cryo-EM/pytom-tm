@@ -63,6 +63,9 @@ def process_star_file(input_star_path, output_star_path):
 def process_directory(directory_path):
     star_files = glob.glob(os.path.join(directory_path, '*.star'))
     for input_star_path in star_files:
+        if input_star_path.endswith('_for_relion.star'):
+            print(f"Skipping {input_star_path} as it already appears to be processed.")
+            continue
         output_star_path = os.path.splitext(input_star_path)[0] + '_for_relion.star'
         process_star_file(input_star_path, output_star_path)
 
@@ -73,3 +76,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     process_directory(args.directory_path)
+
