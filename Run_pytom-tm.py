@@ -34,6 +34,8 @@ parser.add_argument('--gpu-ids','-g', nargs='*', help='Which GPUs to use. Defaul
 
 #option to only make scripts for analysis
 parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change ----number_of_particles or --particle_radius for analysis of the template matching results')
+# Add --force flag argument to trigger re-processing of already matched tilt series 
+parser.add_argument('--force', action='store_true', help='Reprocess all tilt series regardless of existing job JSON files.')
 
 # Parse arguments
 args = parser.parse_args()
@@ -167,6 +169,20 @@ except Exception as e:
     exit()
 print(f"Reading STAR file from {tomograms_star_file}.")
 
+# After reading tilt series names from the STAR file
+tilt_series_names = tomograms_data['rlnTomoName'].tolist()
+
+# Initialize a list to hold tilt series names for which to generate commands
+tilt_series_to_process = []
+
+# Check for existing job JSON files
+for tilt_series_name in tilt_series_names:
+    job_json_path = os.path.join(args.output_dir, f'rec_{tilt_series_name}_job.json')
+    if os.path.exists(job_json_path) and not args.force:
+        print(f"Skipping {tilt_series_name}: job JSON file already exists. Use --force to reprocess.")
+    else:
+        tilt_series_to_process.append(tilt_series_name)
+
 # List of allowed angular search values
 allowed_angular_search_values = [7.00, 35.76, 19.95, 90.00, 18.00, 12.85, 38.53, 11.00, 17.86, 25.25, 50.00, 3.00]
 
@@ -190,7 +206,7 @@ extract_candidates_commands = []
 # Loop through each tilt series name
 print("Processing tilt series data...")
 
-for tilt_series_name in tilt_series_names:
+for tilt_series_name in tilt_series_to_process:
     if process_tilt_series_data(tilt_series_name, args):
         if not args.skip_matching:
             commands_per_tilt_series.append(generate_pytom_command(tilt_series_name, args))
