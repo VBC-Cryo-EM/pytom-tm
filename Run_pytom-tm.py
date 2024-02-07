@@ -76,7 +76,7 @@ def process_tilt_series_data(tilt_series_name, args):
         data = starfile.read(star_file_path)
         #read star file columns
         tilt_angles = data['rlnTomoNominalStageTiltAngle']
-        defocus_values = data['rlnDefocusU']
+        defocus_values = data['rlnDefocusU'] * 0.1
         dose_values = data['rlnMicrographPreExposure']
 
         #define paths for output files
