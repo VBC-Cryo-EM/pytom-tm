@@ -13,6 +13,7 @@ parser.add_argument('--template', '-t' , help='Path to the mrc file of your temp
 parser.add_argument('--mask','-m', help='Path to the mask file applied to your template matching reference', required=True)
 parser.add_argument('--non-spherical-mask', action='store_true', help='Use a non-spherical mask during template matching')
 parser.add_argument('--output-dir', '-o', help='Path to output directory where pytom results are saved. If not gived, the default is input_tomos/pytom_tm', default=None)
+parser.add_argument('--per-tilt-weighting', action='store_true', help='Enable the per tilt weigthting option by ctf and accumualted dose')
 parser.add_argument('--amplitude-contrast', type=float, default=0.08, help='Amplitude contrast (default: 0.08)')
 parser.add_argument('--spherical-abberation', type=float, default=2.7, help='Spherical abberation (default: 2.7)')
 parser.add_argument('--voltage', type=int, default=300, help='Voltage value (default: 300)')
@@ -32,8 +33,9 @@ parser.add_argument('--qos', type=str, default='short', help='QoS for SLURM job 
 parser.add_argument('--gres', type=int, default=1, help='How many GPUs to use per tomogram. Default is 1. if larger, make sure to also give GPU IDs')
 parser.add_argument('--gpu-ids','-g', nargs='*', help='Which GPUs to use. Default is 0. Needs to be given when --gres>1', default=[0])
 
+
 #option to only make scripts for analysis
-parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change ----number_of_particles or --particle_radius for analysis of the template matching results')
+parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change --number_of_particles or --particle_radius for analysis of the template matching results')
 # Add --force flag argument to trigger re-processing of already matched tilt series 
 parser.add_argument('--force', action='store_true', help='Reprocess all tilt series regardless of existing job JSON files.')
 
@@ -114,7 +116,7 @@ def generate_pytom_command(tilt_series_name, args):
         f"--voxel-size {args.voxel_size}" if args.voxel_size else "",
         f"--high-pass {args.high_pass}" if args.high_pass else "",
         f"--low-pass {args.low_pass}" if args.low_pass else "",
-        "--per-tilt-weighting",
+        "--per-tilt-weighting" if args.per_tilt_weighting else "",
         f"--dose-accumulation {output_file_dose}",
         f"--defocus-file {output_file_defocus}",
         f"--amplitude-contrast {args.amplitude_contrast}",
