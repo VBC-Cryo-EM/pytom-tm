@@ -88,6 +88,8 @@ def process_tilt_series_data(tilt_series_name, args):
         dose_values.to_csv(dose_values_file, index=False, header=False)
     except Exception as e:
         sys.stderr.write(f"Failed to process tilt series data for {tilt_series_name}: {e}\n")
+        sys.stderr.write("Does the file exist? \n")
+        sys.stderr.write("Exiting program  \n")
         sys.exit(1)
     return True
 
