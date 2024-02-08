@@ -69,14 +69,13 @@ def find_closest_value(input_value, allowed_values):
 #Extract tilt series meta data from star file and write into auxilary files for pytom tempalte matching
 def process_tilt_series_data(tilt_series_name, args):
     aux_dir = os.path.join(args.output_dir, 'pytom_aux')
-    os.makedirs(aux_dir, exist_ok=True)  # Ensure the directory exists
-
-    star_file_path = os.path.join(args.input_tomos, 'tilt_series', f'{tilt_series_name}.star')
     try:
+        os.makedirs(aux_dir, exist_ok=True)
+        star_file_path = os.path.join(args.input_tomos, 'tilt_series', f'{tilt_series_name}.star')
         data = starfile.read(star_file_path)
         #read star file columns
         tilt_angles = data['rlnTomoNominalStageTiltAngle']
-        defocus_values = data['rlnDefocusU'] *0.1
+        defocus_values = data['rlnDefocusU'] * 0.1
         dose_values = data['rlnMicrographPreExposure']
 
         #define paths for output files
@@ -88,63 +87,52 @@ def process_tilt_series_data(tilt_series_name, args):
         defocus_values.to_csv(defocus_values_file, index=False, header=False)
         dose_values.to_csv(dose_values_file, index=False, header=False)
     except Exception as e:
-            sys.stderr.write("Exiting program due to error in processing tilt series meta data from star file \n")
-            sys.stderr.write(f"Error encountered when trying to process  {tilt_series_name}:  {e}\n")
-            sys.exit(1)
+        sys.stderr.write(f"Failed to process tilt series data for {tilt_series_name}: {e}\n")
+        sys.exit(1)
+    return True
+
 
 # Function to generate template matching command
-
 def generate_pytom_command(tilt_series_name, args):
-    try:
-        aux_dir = os.path.join(args.output_dir, 'pytom_aux')  # Directory for auxiliary files
-        if not os.path.isdir(aux_dir):
-            os.makedirs(aux_dir, exist_ok=True)  # Attempt to create the directory, if it doesn't already exist
+    aux_dir = os.path.join(args.output_dir, 'pytom_aux')  # Directory for auxiliary files
+    input_tomo_file = os.path.join(args.input_tomos, 'tomograms', f'rec_{tilt_series_name}.mrc')
 
-        input_tomo_file = os.path.join(args.input_tomos, 'tomograms', f'rec_{tilt_series_name}.mrc')
-        if not os.path.isfile(input_tomo_file):
-            raise FileNotFoundError(f"Input tomogram file {input_tomo_file} not found.")
+    # Adjust paths to point to files in the aux_dir
+    output_file_tilt = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_tilt.tlt')
+    output_file_defocus = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_defocus.txt')
+    output_file_dose = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
+    job_json_file = f'{input_tomo_file}_job.json'
 
-        # Adjust paths to point to files in the aux_dir
-        output_file_tilt = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_tilt.tlt')
-        output_file_defocus = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_defocus.txt')
-        output_file_dose = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
+    command_components = [
+        'pytom_match_template.py',
+        f"--template {args.template}",
+        f"--mask {args.mask}",
+        "--non-spherical-mask" if args.non_spherical_mask else "",
+        f"--tomogram {input_tomo_file}",
+        f"--destination {args.output_dir}",
+        f"--tilt-angles {output_file_tilt}",
+        f"--angular-search {find_closest_value(args.angular_search, allowed_angular_search_values)}",
+        f"--voxel-size {args.voxel_size}" if args.voxel_size else "",
+        f"--high-pass {args.high_pass}" if args.high_pass else "",
+        f"--low-pass {args.low_pass}" if args.low_pass else "",
+        "--per-tilt-weighting" if args.per_tilt_weighting else "",
+        f"--dose-accumulation {output_file_dose}",
+        f"--defocus-file {output_file_defocus}",
+        f"--amplitude-contrast {args.amplitude_contrast}",
+        f"--spherical-abberation {args.spherical_abberation}",
+        f"--voltage {args.voltage}",
+        f"--volume-split {' '.join(map(str, args.volumesplit))}" if args.volumesplit else "",
+        "--spectral-whitening",
+        f"--gpu-ids {' '.join(map(str, args.gpu_ids))}" if args.gpu_ids else "",
+        #'"'
+    ]
+ 
+ 
+    # Close the command string
+    command = ' '.join(filter(None, command_components))
+    final_command = f"apptainer run --nv {container_path} '{command}'"
 
-        command_components = [
-            'pytom_match_template.py',
-            f"--template {args.template}",
-            f"--mask {args.mask}",
-            "--non-spherical-mask" if args.non_spherical_mask else "",
-            f"--tomogram {input_tomo_file}",
-            f"--destination {args.output_dir}",
-            f"--tilt-angles {output_file_tilt}",
-            f"--angular-search {find_closest_value(args.angular_search, allowed_angular_search_values)}",
-            f"--voxel-size {args.voxel_size}" if args.voxel_size else "",
-            f"--high-pass {args.high_pass}" if args.high_pass else "",
-            f"--low-pass {args.low_pass}" if args.low_pass else "",
-            "--per-tilt-weighting" if args.per_tilt_weighting else "",
-            f"--dose-accumulation {output_file_dose}",
-            f"--defocus-file {output_file_defocus}",
-            f"--amplitude-contrast {args.amplitude_contrast}",
-            f"--spherical-abberation {args.spherical_abberation}",
-            f"--voltage {args.voltage}",
-            f"--volume-split {' '.join(map(str, args.volumesplit))}" if args.volumesplit else "",
-            "--spectral-whitening",
-            f"--gpu-ids {' '.join(map(str, args.gpu_ids))}" if args.gpu_ids else "",
-        ]
-        
-        # Validate the angular search value
-        if args.angular_search not in allowed_angular_search_values:
-            raise ValueError(f"Angular search value {args.angular_search} is not in the allowed values: {allowed_angular_search_values}")
-        
-        # Construct the command
-        command = ' '.join(filter(None, command_components))
-        final_command = f"apptainer run --nv {container_path} '{command}'"
-        
-        return final_command
-    except Exception as e:
-        sys.stderr.write(f"Failed to generate pytom command for {tilt_series_name}: {e}\n")
-        sys.exit(1)
-
+    return final_command
 
 # Function to generate the estimate ROC command
 def generate_estimate_roc_command(tilt_series_name, args):
