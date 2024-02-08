@@ -45,6 +45,9 @@ args = parser.parse_args()
 # Path to pytom container
 container_path = '/resources/containers/pytom_tm.sif'
 
+# Global list to accumulate warning messages
+warning_messages = []
+
 # Checking if input files/directories exist
 def check_file_exists(file_path, description):
     if not os.path.exists(file_path):
@@ -63,8 +66,9 @@ def find_closest_value(input_value, allowed_values):
     if closest_value != input_value:
         formatted_input = "{:.2f}".format(input_value)
         formatted_closest = "{:.2f}".format(closest_value)
-        print(f"Warning: Provided angular search value {formatted_input} adjusted to closest allowed value {formatted_closest}.")
-    return "{:.2f}".format(closest_value)  # Return the formatted closest value
+        message = f"Warning: Provided angular search value {formatted_input} adjusted to closest allowed value {formatted_closest}."
+        warning_messages.append(message)  # Add the warning message to the global list
+    return "{:.2f}".format(closest_value)
 
 #Extract tilt series meta data from star file and write into auxilary files for pytom tempalte matching
 def process_tilt_series_data(tilt_series_name, args):
@@ -105,6 +109,7 @@ def generate_pytom_command(tilt_series_name, args):
     output_file_dose = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
     job_json_file = f'{input_tomo_file}_job.json'
 
+    
     command_components = [
         'pytom_match_template.py',
         f"--template {args.template}",
@@ -251,3 +256,6 @@ write_script_batches(extract_candidates_commands, 'pytom_extract_candidates', ar
 print("Extract candidates scripts written.")
 
 print("All processes completed successfully.")
+#Print any warnings:
+for message in warning_messages:
+    print(message, flush=True)
