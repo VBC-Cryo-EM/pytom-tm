@@ -58,13 +58,25 @@ def check_file_exists(file_path, description):
 # Function to determine the source of tomogram files
 def get_tomogram_source():
     if args.alt_tomo_source and os.path.exists(args.alt_tomo_source):
+
         print(f"Using alternative tomogram source: {args.alt_tomo_source}")
-        return args.alt_tomo_source
+        return os.path.abspath(args.alt_tomo_source)
     else:
         if not os.path.exists(args.input_tomos):
             print(f"Error: The specified input tomograms directory, '{args.input_tomos}', does not exist.")
             exit(1)
-        return args.input_tomos
+        return os.path.join(args.input_tomos)
+    
+# Function to determine the source of tomogram files
+    
+def get_tomogram_file_path(tilt_series_name):
+    if args.alt_tomo_source:
+        # If the alternative source for tomograms is provided, use it directly
+        return os.path.join(os.path.abspath(args.alt_tomo_source), f'rec_{tilt_series_name}.mrc')
+    else:
+        # Otherwise, use the input_tomos path and append '/tomograms' to it
+        return os.path.join(os.path.abspath(args.input_tomos), 'tomograms', f'rec_{tilt_series_name}.mrc')
+    
 
 # Use the determined source of tomogram files
 tomogram_source = get_tomogram_source()
@@ -116,7 +128,7 @@ def process_tilt_series_data(tilt_series_name, args):
 # Function to generate template matching command
 def generate_pytom_command(tilt_series_name, args):
     aux_dir = os.path.join(args.output_dir, 'pytom_aux')  # Directory for auxiliary files
-    input_tomo_file = os.path.join(tomogram_source, 'tomograms', f'rec_{tilt_series_name}.mrc')
+    input_tomo_file = get_tomogram_file_path(tilt_series_name)  # Adjusted to use the correct path
 
     # Adjust paths to point to files in the aux_dir
     output_file_tilt = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_tilt.tlt')
@@ -272,7 +284,7 @@ print("Estimate ROC scripts written.")
 write_script_batches(extract_candidates_commands, 'pytom_extract_candidates', args.output_dir)
 print("Extract candidates scripts written.")
 
-print("All processes completed successfully. Don't forget to submit the scripts to the cluster :)")
+print("All processes completed successfully.")
 #Print any warnings:
 for message in warning_messages:
     print(message, flush=True)
