@@ -9,6 +9,7 @@ import sys
 # Set up argument parsing
 parser = argparse.ArgumentParser(description='Process STAR file and run pytom_match_template.py.')
 parser.add_argument('--input-tomos', '-i', help='Path to relion ReconstructTomograms job,, i,.e /path/to/relion/ReconstructTomograms/job020 ', required=True)
+parser.add_argument('--alt-tomo-source', '-a', help='Alternative path to source of tomogram files if they were reconstructed outside of RELION. Otherwise, the script assumes tomograms are in --input-tomos/tomograms. Note: Tomograms should be named rec_[tilt-series-name].mrc', required=False)
 parser.add_argument('--template', '-t' , help='Path to the mrc file of your template matching reference', required=True)
 parser.add_argument('--mask','-m', help='Path to the mask file applied to your template matching reference', required=True)
 parser.add_argument('--non-spherical-mask', action='store_true', help='Use a non-spherical mask during template matching')
@@ -53,6 +54,20 @@ def check_file_exists(file_path, description):
     if not os.path.exists(file_path):
         print(f"Error: The specified {description}, '{file_path}', does not exist.")
         exit(1)
+
+# Function to determine the source of tomogram files
+def get_tomogram_source():
+    if args.alt_tomo_source and os.path.exists(args.alt_tomo_source):
+        print(f"Using alternative tomogram source: {args.alt_tomo_source}")
+        return args.alt_tomo_source
+    else:
+        if not os.path.exists(args.input_tomos):
+            print(f"Error: The specified input tomograms directory, '{args.input_tomos}', does not exist.")
+            exit(1)
+        return args.input_tomos
+
+# Use the determined source of tomogram files
+tomogram_source = get_tomogram_source()
 
 # Perform checks
 check_file_exists(args.input_tomos, "input tomograms directory")
@@ -101,7 +116,7 @@ def process_tilt_series_data(tilt_series_name, args):
 # Function to generate template matching command
 def generate_pytom_command(tilt_series_name, args):
     aux_dir = os.path.join(args.output_dir, 'pytom_aux')  # Directory for auxiliary files
-    input_tomo_file = os.path.join(args.input_tomos, 'tomograms', f'rec_{tilt_series_name}.mrc')
+    input_tomo_file = os.path.join(tomogram_source, 'tomograms', f'rec_{tilt_series_name}.mrc')
 
     # Adjust paths to point to files in the aux_dir
     output_file_tilt = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_tilt.tlt')
@@ -162,6 +177,8 @@ args.input_tomos = os.path.abspath(args.input_tomos)
 args.template = os.path.abspath(args.template) if args.template else None
 args.mask = os.path.abspath(args.mask) if args.mask else None
 args.output_dir = os.path.abspath(args.output_dir) if args.output_dir else os.path.join(args.input_tomos, 'pytom_tm')
+
+
 
 # Create the output directory if it does not exist
 os.makedirs(args.output_dir, exist_ok=True)
