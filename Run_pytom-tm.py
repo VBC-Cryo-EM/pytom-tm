@@ -272,7 +272,7 @@ print("Estimate ROC scripts written.")
 write_script_batches(extract_candidates_commands, 'pytom_extract_candidates', args.output_dir)
 print("Extract candidates scripts written.")
 
-print("All processes completed successfully.")
+print("All processes completed successfully. Don't forget to submit the scripts to the cluster :)")
 #Print any warnings:
 for message in warning_messages:
     print(message, flush=True)
