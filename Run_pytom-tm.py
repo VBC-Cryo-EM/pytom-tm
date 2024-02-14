@@ -109,12 +109,16 @@ def process_tilt_series_data(tilt_series_name, args):
         
         # Always generate tilt angles from the STAR file
         star_file_path = os.path.join(args.input_tomos, 'tilt_series', f'{tilt_series_name}.star')
-        print(f"Processing STAR file for tilt angles: {star_file_path}")  # Debugging statement
+        #print(f"Processing STAR file for tilt angles: {star_file_path}")  # Debugging statement
         data = starfile.read(star_file_path)
         tilt_angles = data['rlnTomoNominalStageTiltAngle']
         tilt_angles_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_tilt.tlt')
         tilt_angles.to_csv(tilt_angles_file, index=False, header=False)
-        print(f"Tilt angles file saved: {tilt_angles_file}")  # Debugging statement
+        #process dose 
+        dose_values = data['rlnMicrographPreExposure']
+        dose_values_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
+        dose_values.to_csv(dose_values_file, index=False, header=False)
+        #print(f"Tilt angles file saved: {tilt_angles_file}")  # Debugging statement
 
         # Check if a directory for defocus files is provided
         if args.defocus_file_dir:
@@ -130,8 +134,8 @@ def process_tilt_series_data(tilt_series_name, args):
             defocus_values = data['rlnDefocusU'] * 0.1
             defocus_values_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_defocus.txt')
             defocus_values.to_csv(defocus_values_file, index=False, header=False)
-            print(f"Defocus values file generated and saved: {defocus_values_file}")  # Debugging statement
-
+            #print(f"Defocus values file generated and saved: {defocus_values_file}")  # Debugging statement
+            
     except Exception as e:
         sys.stderr.write(f"Failed to process tilt series data for {tilt_series_name}: {e}\n")
         sys.exit(1)
