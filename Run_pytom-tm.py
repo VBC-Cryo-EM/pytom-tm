@@ -116,7 +116,7 @@ def process_tilt_series_data(tilt_series_name, args):
         tilt_angles.to_csv(tilt_angles_file, index=False, header=False)
         #process dose 
         dose_values = data['rlnMicrographPreExposure']
-        dose_values_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
+        dose_values_file = os.path.join(aux_dir, f'{tilt_series_name}.defocus')
         dose_values.to_csv(dose_values_file, index=False, header=False)
         #print(f"Tilt angles file saved: {tilt_angles_file}")  # Debugging statement
 
@@ -140,7 +140,7 @@ def process_tilt_series_data(tilt_series_name, args):
         sys.stderr.write(f"Failed to process tilt series data for {tilt_series_name}: {e}\n")
         sys.exit(1)
 
-
+    return True
 # Function to generate template matching command
 def generate_pytom_command(tilt_series_name, args):
     aux_dir = os.path.join(args.output_dir, 'pytom_aux')  # Directory for auxiliary files
@@ -148,11 +148,18 @@ def generate_pytom_command(tilt_series_name, args):
 
     # Adjust paths to point to files in the aux_dir
     output_file_tilt = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_tilt.tlt')
-    output_file_defocus = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_defocus.txt')
     output_file_dose = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
     job_json_file = f'{input_tomo_file}_job.json'
 
+    # Check for the existence of a defocus file in the aux_dir
+    defocus_file_name = f"{tilt_series_name}.defocus"
+    defocus_file_path = os.path.join(aux_dir, defocus_file_name)
+    if not os.path.exists(defocus_file_path):
+        # Fallback to a generated defocus file if the expected file does not exist
+        defocus_file_path = os.path.join(aux_dir, f"{tilt_series_name}.defocus")  # Adjust this line if the naming convention is different
     
+    output_file_dose = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
+
     command_components = [
         'pytom_match_template.py',
         f"--template {args.template}",
@@ -167,7 +174,7 @@ def generate_pytom_command(tilt_series_name, args):
         f"--low-pass {args.low_pass}" if args.low_pass else "",
         "--per-tilt-weighting" if args.per_tilt_weighting else "",
         f"--dose-accumulation {output_file_dose}",
-        f"--defocus-file {output_file_defocus}",
+        f"--defocus-file {defocus_file_path}",  # Use the correct defocus file path
         f"--amplitude-contrast {args.amplitude_contrast}",
         f"--spherical-abberation {args.spherical_abberation}",
         f"--voltage {args.voltage}",
@@ -320,5 +327,3 @@ print(f"for scripts in {os.path.abspath(submission_dir)}/*extract_candiates*.sba
 #Print any warnings:
 for message in warning_messages:
     print(message, flush=True)
-
-
