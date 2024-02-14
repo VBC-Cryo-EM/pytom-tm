@@ -5,11 +5,13 @@ import argparse
 import starfile
 import subprocess
 import sys
+import shutil
 
 # Set up argument parsing
 parser = argparse.ArgumentParser(description='Process STAR file and run pytom_match_template.py.')
 parser.add_argument('--input-tomos', '-i', help='Path to relion ReconstructTomograms job,, i,.e /path/to/relion/ReconstructTomograms/job020 ', required=True)
 parser.add_argument('--alt-tomo-source', '-a', help='Alternative path to source of tomogram files if they were reconstructed outside of RELION. Otherwise, the script assumes tomograms are in --input-tomos/tomograms. Note: Tomograms should be named rec_[tilt-series-name].mrc', required=False)
+parser.add_argument('--defocus-file-dir', help='Directory containing .defocus files. By default set to the same as --alt-tomo-source, but can be changed here', required=False)
 parser.add_argument('--template', '-t' , help='Path to the mrc file of your template matching reference', required=True)
 parser.add_argument('--mask','-m', help='Path to the mask file applied to your template matching reference', required=True)
 parser.add_argument('--non-spherical-mask', action='store_true', help='Use a non-spherical mask during template matching')
@@ -19,22 +21,19 @@ parser.add_argument('--amplitude-contrast', type=float, default=0.08, help='Ampl
 parser.add_argument('--spherical-abberation', type=float, default=2.7, help='Spherical abberation (default: 2.7)')
 parser.add_argument('--voltage', type=int, default=300, help='Voltage value (default: 300)')
 parser.add_argument('--angular-search', type=float, required=True, help='Angular search value. Allowed options are 3.00, 7.00, 11.00, 12.85, 17.86, 18.00, 19.95, 25.25, 38.53, 35.76,50.00, 90.00')
-parser.add_argument('--voxel-size', type=float, required=False, help='Voxel size value of input tomograms and template (must be identical). If not given it will be read form the mrc header')
+parser.add_argument('--voxelsize', type=float, required=False, help='Voxel size value of input tomograms and template (must be identical). If not given it will be read form the mrc header')
 parser.add_argument('--high-pass', type=int, required=False, help='Apply a high-pass filter to the tomogram and template to reduce correlation with large low frequency variations. Value is a resolution in A, e.g. 500 could be appropriate as the CTF is often incorrectly modelled up to 50nm.')
 parser.add_argument('--low-pass', type=int, required=False, help='Apply a low-pass filter to the tomogram and template. Generally desired if the template was already filtered to a certain resolution. Value is the resolution in A.')
 parser.add_argument('--volumesplit', '-s', nargs='*', help='Split the volume into smaller parts for the search, can be relevant if the volume does not fit into GPU memory. Format is x y z, e.g. --volume-split 1 2 1 will split y into 2 chunks, resulting in 2 subvolumes. --volume-split 2 2 1 will split x and y in 2 chunks, resulting in 2 x 2 = 4 subvolumes.', default=[])
 parser.add_argument('-n', '--number_of_particles', type=int, required=True, help='Number of particles')
 parser.add_argument('-r', '--particle_radius', type=int, required=True, help='Particle radius in pixels')
 parser.add_argument('--cutoff', '-c', type=float, help='Cutoff value to be used in pytom_extract_candidates', required=False)
-
 parser.add_argument('--batch-size', '-b' , type=int, default=10, help='Run pytom on this many tomograms per job. I.e if you have 50 tomograms in the relion  idrectory, a batch size of 10 will generate 5 SLURM scripts, each procesing 10 tomograms.')
 #SLURM options 
 parser.add_argument('--mem', type=str, default='30G', help='Memory for SLURM job (default: 30G)')
 parser.add_argument('--qos', type=str, default='short', help='QoS for SLURM job (default: short)')
 parser.add_argument('--gres', type=int, default=1, help='How many GPUs to use per tomogram. Default is 1. if larger, make sure to also give GPU IDs')
 parser.add_argument('--gpu-ids','-g', nargs='*', help='Which GPUs to use. Default is 0. Needs to be given when --gres>1', default=[0])
-
-
 #option to only make scripts for analysis
 parser.add_argument('--skip-matching', action='store_true', help='Skip generating the template matching SLURM scripts and only write out extract_candidates and estimate_roc. useful when you want to change --number_of_particles or --particle_radius for analysis of the template matching results')
 # Add --force flag argument to trigger re-processing of already matched tilt series 
@@ -42,6 +41,12 @@ parser.add_argument('--force', action='store_true', help='Reprocess all tilt ser
 
 # Parse arguments
 args = parser.parse_args()
+
+
+# Conditionally set defocus_file_dir based on alt-tomo-source
+if args.alt_tomo_source and not args.defocus_file_dir:
+    args.defocus_file_dir = args.alt_tomo_source
+
 
 # Path to pytom container
 container_path = '/resources/containers/pytom_tm.sif'
@@ -97,32 +102,39 @@ def find_closest_value(input_value, allowed_values):
         warning_messages.append(message)  # Add the warning message to the global list
     return "{:.2f}".format(closest_value)
 
-#Extract tilt series meta data from star file and write into auxilary files for pytom tempalte matching
 def process_tilt_series_data(tilt_series_name, args):
     aux_dir = os.path.join(args.output_dir, 'pytom_aux')
     try:
         os.makedirs(aux_dir, exist_ok=True)
+        
+        # Always generate tilt angles from the STAR file
         star_file_path = os.path.join(args.input_tomos, 'tilt_series', f'{tilt_series_name}.star')
+        print(f"Processing STAR file for tilt angles: {star_file_path}")  # Debugging statement
         data = starfile.read(star_file_path)
-        #read star file columns
         tilt_angles = data['rlnTomoNominalStageTiltAngle']
-        defocus_values = data['rlnDefocusU'] * 0.1
-        dose_values = data['rlnMicrographPreExposure']
-
-        #define paths for output files
         tilt_angles_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_tilt.tlt')
-        defocus_values_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_defocus.txt')
-        dose_values_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_dose.txt')
-
         tilt_angles.to_csv(tilt_angles_file, index=False, header=False)
-        defocus_values.to_csv(defocus_values_file, index=False, header=False)
-        dose_values.to_csv(dose_values_file, index=False, header=False)
+        print(f"Tilt angles file saved: {tilt_angles_file}")  # Debugging statement
+
+        # Check if a directory for defocus files is provided
+        if args.defocus_file_dir:
+            defocus_file_path = os.path.join(args.defocus_file_dir, f"{tilt_series_name}.defocus")
+            print(f"Looking for defocus file at: {defocus_file_path}")  # Debugging statement
+            if not os.path.exists(defocus_file_path):
+                raise FileNotFoundError(f"No defocus file found for {tilt_series_name} in {args.defocus_file_dir}")
+            shutil.copy(defocus_file_path, aux_dir)
+            print(f"Using existing defocus file for {tilt_series_name}: {defocus_file_path}")
+
+        else:
+            # If no defocus file dir is provided, generate defocus values from STAR file
+            defocus_values = data['rlnDefocusU'] * 0.1
+            defocus_values_file = os.path.join(aux_dir, f'{tilt_series_name}_for_pytom_defocus.txt')
+            defocus_values.to_csv(defocus_values_file, index=False, header=False)
+            print(f"Defocus values file generated and saved: {defocus_values_file}")  # Debugging statement
+
     except Exception as e:
         sys.stderr.write(f"Failed to process tilt series data for {tilt_series_name}: {e}\n")
-        sys.stderr.write("Does the file exist? \n")
-        sys.stderr.write("Exiting program  \n")
         sys.exit(1)
-    return True
 
 
 # Function to generate template matching command
@@ -146,7 +158,7 @@ def generate_pytom_command(tilt_series_name, args):
         f"--destination {args.output_dir}",
         f"--tilt-angles {output_file_tilt}",
         f"--angular-search {find_closest_value(args.angular_search, allowed_angular_search_values)}",
-        f"--voxel-size {args.voxel_size}" if args.voxel_size else "",
+        f"--voxel-size {args.voxelsize}" if args.voxelsize else "",
         f"--high-pass {args.high_pass}" if args.high_pass else "",
         f"--low-pass {args.low_pass}" if args.low_pass else "",
         "--per-tilt-weighting" if args.per_tilt_weighting else "",
@@ -194,7 +206,7 @@ args.output_dir = os.path.abspath(args.output_dir) if args.output_dir else os.pa
 
 # Create the output directory if it does not exist
 os.makedirs(args.output_dir, exist_ok=True)
-print(f"Output directory {args.output_dir} is ready.")
+#print(f"Output directory {args.output_dir} is ready.")
 
 # Read the STAR file located at [input_tomos]/tomograms.star
 tomograms_star_file = os.path.join(args.input_tomos, 'tomograms.star')
@@ -252,7 +264,7 @@ for tilt_series_name in tilt_series_to_process:
 
 
 #functions to write SLURM submission script files 
-def write_sbatch_file(commands, file_name, submission_dir):
+def write_scripts(commands, file_name, submission_dir):
     full_path = os.path.join(submission_dir, file_name)
     with open(full_path, 'w') as file:
         file.write(slurm_header)
@@ -268,23 +280,41 @@ def write_script_batches(commands_list, script_name, output_dir):
         for i in range(0, len(commands_list), args.batch_size):
             batch_commands = commands_list[i:i + args.batch_size]
             batch_file_name = f'{script_name}_batch{i//args.batch_size}.sbatch'
-            write_sbatch_file(batch_commands, batch_file_name, submission_dir)
+            write_scripts(batch_commands, batch_file_name, submission_dir)
     else:
         file_name = f'{script_name}.sbatch'
-        write_sbatch_file(commands_list, file_name, submission_dir)
+        write_scripts(commands_list, file_name, submission_dir)
+    
 
 # Write script batches conditionally
 if not args.skip_matching:
     write_script_batches(commands_per_tilt_series, 'pytom_template_matching', args.output_dir)
-    print("Template matching scripts written.")
+    #print("Template matching scripts written.")
 
 write_script_batches(estimate_roc_commands, 'pytom_estimate_roc', args.output_dir)
-print("Estimate ROC scripts written.")
+#print("Estimate ROC scripts written.")
 
 write_script_batches(extract_candidates_commands, 'pytom_extract_candidates', args.output_dir)
-print("Extract candidates scripts written.")
+#print("Extract candidates scripts written.")
 
 print("All processes completed successfully.")
+
+submission_dir = os.path.join(args.output_dir, 'submission_scripts')
+
+# Print out a Bash for-loop for submitting all generated SLURM scripts
+print("\nTo submit all template matching jobs, run the following commands:")
+print("Tempalte matching scripts:")
+print(f"for scripts in {os.path.abspath(submission_dir)}/*template_matching*.sbatch; do sbatch $scripts ; done")
+print ("\n")
+print("Estimate ROC curves: (run this after template matching finished):")
+print(f"for scripts in {os.path.abspath(submission_dir)}/*estimate_roc*.sbatch; do sbatch $scripts ; done")
+print ("\n")
+
+print("Extract_candidates: (run this after template matching finished):")
+print(f"for scripts in {os.path.abspath(submission_dir)}/*extract_candiates*.sbatch; do sbatch $scripts ; done")
+
 #Print any warnings:
 for message in warning_messages:
     print(message, flush=True)
+
+
